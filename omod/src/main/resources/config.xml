@@ -22,16 +22,14 @@
 		<require_module version="1.0.0">
 			org.openmrs.module.shr-contenthandler
 		</require_module>
-																											
 		<require_module version="2.3">
 			org.openmrs.module.webservices.rest
 		</require_module>
-			
 	</require_modules>
 	<!-- / Required Modules -->
 	
 	<!-- Module Activator -->
-	<activator>${project.parent.groupId}.${project.parent.artifactId}.SHRRESTInterfaceActivator</activator>
+	<activator>${project.parent.groupId}.shr.rest.SHRRESTInterfaceActivator</activator>
 	
 	
 	<!-- Maps hibernate file's, if present -->
