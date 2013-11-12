@@ -64,6 +64,7 @@ public class EncounterController extends BaseRestController {
 			@RequestParam(value = "providerIdType", required = true) String providerIdType,
 			@RequestParam(value = "encounterType", required = true) String encounterType,
 			@RequestParam(value = "formatCode", required = true) String formatCode,
+			@RequestParam(value = "isURL", required = false) String isURL,
 			HttpServletRequest request, HttpServletResponse response) {
 		
 		try {
@@ -78,7 +79,8 @@ public class EncounterController extends BaseRestController {
 			Provider provider = getOrCreateProvider(providerId, providerIdType);
 			EncounterRole role = getDefaultEncounterRole();
 			EncounterType type = getOrCreateEncounterType(encounterType);
-			Content content = buildContent(contentType, request, formatCode);
+			boolean url = (isURL!=null && "true".equalsIgnoreCase(isURL)) ? true : false;
+			Content content = buildContent(contentType, request, formatCode, url);
 			
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 			ContentHandler handler = chs.getContentHandler(contentType);
@@ -290,7 +292,7 @@ public class EncounterController extends BaseRestController {
 		return res;
 	}
 	
-	private Content buildContent(String contentType, HttpServletRequest request, String formatCode) {
+	private Content buildContent(String contentType, HttpServletRequest request, String formatCode, boolean isURL) throws RequestError {
 		try {
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			IOUtils.copy(request.getInputStream(), out);
@@ -298,16 +300,20 @@ public class EncounterController extends BaseRestController {
 			String payload = null;
 			Representation rep = null;
 			if (contentType.startsWith("text") || contentType.equals("application/xml")) {
+				//This will include text-based URL data
 				payload = new String(out.toByteArray());
 				rep = Representation.TXT;
+			} else if (isURL) {
+				payload = new String(out.toByteArray());
+				rep = Representation.BINARY;
 			} else {
 				payload = Base64.encodeBase64String(out.toByteArray());
 				rep = Representation.B64;
 			}
 			
-			return new Content(payload, false, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
+			return new Content(payload, isURL, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
 		} catch (IOException ex) {
-			return null;
+			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error while processing request: " + ex.getMessage());
 		}
 	}
 	
