@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.openmrs.module</groupId>
 		<artifactId>shr-rest</artifactId>
-		<version>0.0.1</version>
+		<version>0.0.9</version>
 	</parent>
 
 	<artifactId>shr-rest-omod</artifactId>

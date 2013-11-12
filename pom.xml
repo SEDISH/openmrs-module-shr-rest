@@ -4,11 +4,11 @@
 
 	<groupId>org.openmrs.module</groupId>
 	<artifactId>shr-rest</artifactId>
-	<version>0.0.1</version>
+	<version>0.0.9</version>
 	<packaging>pom</packaging>
 	<name>SHR REST Interface Module</name>
 	<description>Provides simple REST interfaces for accessing a patient's shared health record</description>
-	<url>https://wiki.openmrs.org/display/docs/SHR+REST+Interface+Module+Module</url>
+	<url>https://github.com/jembi/openmrs-module-shr-rest</url>
 	
 	<developers>
 		<developer>
