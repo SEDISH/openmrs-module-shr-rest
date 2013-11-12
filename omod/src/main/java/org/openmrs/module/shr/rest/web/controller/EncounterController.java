@@ -299,7 +299,7 @@ public class EncounterController extends BaseRestController {
 			
 			String payload = null;
 			Representation rep = null;
-			if (contentType.startsWith("text") || contentType.equals("application/xml")) {
+			if (isContentTypeTextBased(contentType)) {
 				//This will include text-based URL data
 				payload = new String(out.toByteArray());
 				rep = Representation.TXT;
@@ -315,6 +315,14 @@ public class EncounterController extends BaseRestController {
 		} catch (IOException ex) {
 			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error while processing request: " + ex.getMessage());
 		}
+	}
+	
+	private static boolean isContentTypeTextBased(String contentType) {
+		return contentType.startsWith("text") ||
+			//try to match application/xml* (e.g. application/xml+cda)
+			contentType.startsWith("application/xml") ||
+			//try to match application/json*
+			contentType.startsWith("application/json");
 	}
 	
 	
