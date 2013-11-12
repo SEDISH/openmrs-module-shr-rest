@@ -67,31 +67,41 @@ public class EncounterController extends BaseRestController {
 			HttpServletRequest request, HttpServletResponse response) {
 		
 		try {
+			if (log.isDebugEnabled()) {
+				log.debug(String.format("SHR GET documents request for patient %s-%s", patientIdType, patientId));
+			}
+			
+			if (contentType==null || contentType.isEmpty())
+				throw new RequestError(HttpStatus.NOT_ACCEPTABLE.value(), "Content-Type expected");
+			
 			Patient patient = getOrCreatePatient(patientId, patientIdType);
 			Provider provider = getOrCreateProvider(providerId, providerIdType);
 			EncounterRole role = getDefaultEncounterRole();
 			EncounterType type = getOrCreateEncounterType(encounterType);
-			Content content = buildContent(request, formatCode);
+			Content content = buildContent(contentType, request, formatCode);
 			
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 			ContentHandler handler = chs.getContentHandler(contentType);
 			handler.saveContent(patient, provider, role, type, content);
 			
 			response.setStatus(HttpStatus.CREATED.value());
+			log.debug("CREATED");
 			return null;
 			
 		} catch (RequestError error) {
+			if (log.isDebugEnabled()) {
+				log.debug("Request Response - " + error);
+			}
+			
 			response.setStatus(error.responseCode);
-			if (error.responseType!=null)
-				response.setContentType(error.responseType);
-			return error.response + "\n";
+			return error.response;
 		}
 	}
 	
 	@RequestMapping(value = "/documents", method = RequestMethod.GET)
 	@ResponseBody
 	public Object getDocuments(
-			@RequestHeader(value = "Accept", required = true) String accept,
+			@RequestParam(value = "contentType", required = true) String contentType,
 			@RequestParam(value = "patientId", required = true) String patientId,
 			@RequestParam(value = "patientIdType", required = true) String patientIdType,
 			@RequestParam(value = "dateStart", required = false) String dateStart,
@@ -99,21 +109,32 @@ public class EncounterController extends BaseRestController {
 			HttpServletRequest request, HttpServletResponse response) {
 		
 		try {
-			Patient patient = getOrCreatePatient(patientId, patientIdType);
+			if (log.isDebugEnabled()) {
+				log.debug(String.format("SHR GET documents request for patient %s-%s", patientIdType, patientId));
+			}
+			
+			Patient patient = getPatient(patientId, patientIdType);
+			if (patient==null) {
+				String msg = String.format("Patient %s-%s not found", patientIdType, patientId);
+				throw new RequestError(HttpStatus.NOT_FOUND.value(), msg);
+			}
+			
 			Date from = parseDate(dateStart);
 			Date to = parseDate(dateEnd);
-			List<byte[]> result = getContent(accept, patient, from, to);
+			List<Content> result = getContent(contentType, patient, from, to);
 			
 			response.setStatus(HttpStatus.OK.value());
-			response.setContentType(accept);
 			
+			log.debug("OK");
 			return result.isEmpty() ? null : result;
 			
 		} catch (RequestError error) {
+			if (log.isDebugEnabled()) {
+				log.debug("Request Response - " + error);
+			}
+				
 			response.setStatus(error.responseCode);
-			if (error.responseType!=null)
-				response.setContentType(error.responseType);
-			return error.response + "\n";
+			return error.response;
 		}
 	}
 	
@@ -125,25 +146,37 @@ public class EncounterController extends BaseRestController {
 			SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 			return format.parse(date);
 		} catch (ParseException ex) {
-			throw new RequestError(HttpStatus.BAD_REQUEST.value(), "text/plain", "Invalid date format. ISO 8601 expected.");
+			throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Invalid date format. ISO 8601 expected.");
 		}
 	}
 	
-	private Patient getOrCreatePatient(String patientId, String idType) throws RequestError {
+	private Patient getPatient(String patientId, String idType) throws RequestError {
 		PatientService ps = Context.getPatientService();
 		PatientIdentifierType pidType = ps.getPatientIdentifierTypeByName(idType);
 		
 		if (pidType==null)
-			throw new RequestError(HttpStatus.NOT_FOUND.value(), "text/plain", "Unknown identifier type '" + idType + "'");
+			throw new RequestError(HttpStatus.NOT_FOUND.value(), "Unknown identifier type '" + idType + "'");
 			
 		List<Patient> patients = ps.getPatients(null, patientId, Collections.singletonList(pidType), true);
 		
-		if (patients.isEmpty())
-			return createPatient(patientId, pidType);
-		if (patients.size()>1)
-			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "text/plain", "Multiple patients found for requested identifier");
+		if (patients.isEmpty()) {
+			return null;
+		} else if (patients.size()>1) {
+			String message = String.format("Multiple patients found for identifier %s-%s", idType, patientId);
+			log.error(message);
+			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), message);
+		}
 		
 		return patients.get(0);
+	}
+	
+	private Patient getOrCreatePatient(String patientId, String idType) throws RequestError {
+		Patient p = getPatient(patientId, idType);
+		if (p==null) {
+			PatientIdentifierType pidType = Context.getPatientService().getPatientIdentifierTypeByName(idType);
+			return createPatient(patientId, pidType);
+		}
+		return p;
 	}
 	
 	private Patient createPatient(String id, PatientIdentifierType idType) {
@@ -161,7 +194,11 @@ public class EncounterController extends BaseRestController {
         pn.setGivenName("Auto");
         pn.setFamilyName("Generated");
         patient.addName(pn);
+        
+        //TODO Gender is required, but we don't know this...
+        patient.setGender("F");
 
+        Context.getPatientService().savePatient(patient);
 		return patient;
 	}
 	
@@ -173,10 +210,13 @@ public class EncounterController extends BaseRestController {
 		attr.put(type, id);
 		List<Provider> providers = ps.getProviders(null, null, null, attr);
 		
-		if (providers.isEmpty())
+		if (providers.isEmpty()) {
 			return createProvider(id, type);
-		else if (providers.size()>1)
-			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "text/plain", "Multiple providers found for requested identifier");
+		} else if (providers.size()>1) {
+			String message = String.format("Multiple providers found for identifier %s-%s", idType, id);
+			log.error(message);
+			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), message);
+		}
 		
 		return providers.get(0);
 	}
@@ -233,44 +273,58 @@ public class EncounterController extends BaseRestController {
 	}
 	
 	
-	private List<byte[]> getContent(String contentType, Patient patient, Date from, Date to) throws RequestError {
+	private List<Content> getContent(String contentType, Patient patient, Date from, Date to) throws RequestError {
 		ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 		ContentHandler handler = chs.getContentHandler(contentType);
-		List<byte[]> res = new LinkedList<byte[]>();
+		List<Content> res = new LinkedList<Content>();
 		
 		try {
 			for (Content content : handler.queryEncounters(patient, from, to)) {
-				res.add(content.getRawData());
+				res.add(content);
 			}
-		} catch (IOException e) {
+		} catch (Exception e) {
 			log.error(e);
-			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "text/plain", "Error while processing request: " + e.getMessage());
+			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error while processing request: " + e.getMessage());
 		}
 		
 		return res;
 	}
 	
-	private Content buildContent(HttpServletRequest request, String formatCode) {
+	private Content buildContent(String contentType, HttpServletRequest request, String formatCode) {
 		try {
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			IOUtils.copy(request.getInputStream(), out);
-			String payload = Base64.encodeBase64String(out.toByteArray());
-			return new Content(payload, false, formatCode, request.getContentType(), request.getCharacterEncoding(), Representation.B64, null, null);
+			
+			String payload = null;
+			Representation rep = null;
+			if (contentType.startsWith("text") || contentType.equals("application/xml")) {
+				payload = new String(out.toByteArray());
+				rep = Representation.TXT;
+			} else {
+				payload = Base64.encodeBase64String(out.toByteArray());
+				rep = Representation.B64;
+			}
+			
+			return new Content(payload, false, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
 		} catch (IOException ex) {
 			return null;
 		}
 	}
 	
+	
 	@SuppressWarnings("serial")
 	private static class RequestError extends Exception {
 		int responseCode;
-		String responseType;
 		String response;
 		
-		public RequestError(int responseCode, String responseType, String response) {
+		public RequestError(int responseCode, String response) {
 			this.responseCode = responseCode;
-			this.responseType = responseType;
 			this.response = response;
+		}
+
+		@Override
+		public String toString() {
+			return String.format("Code: %s, Response: %s", responseCode, response);
 		}
 	}
 }
