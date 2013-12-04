@@ -31,6 +31,7 @@ import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.openmrs.Encounter;
 import org.openmrs.EncounterRole;
 import org.openmrs.EncounterType;
 import org.openmrs.Patient;
@@ -86,7 +87,7 @@ public class EncounterController extends BaseRestController {
 			}
 			
 			if (contentType==null || contentType.isEmpty())
-				throw new RequestError(HttpStatus.NOT_ACCEPTABLE.value(), "Content-Type expected");
+				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Content-Type expected");
 			
 			Patient patient = getOrCreatePatient(patientId, patientIdType);
 			Provider provider = getOrCreateProvider(providerId, providerIdType);
@@ -97,11 +98,46 @@ public class EncounterController extends BaseRestController {
 			
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 			ContentHandler handler = chs.getContentHandler(contentType);
-			handler.saveContent(patient, provider, role, type, content);
+			Encounter encounter = handler.saveContent(patient, provider, role, type, content);
 			
 			response.setStatus(HttpStatus.CREATED.value());
 			log.debug("CREATED");
-			return null;
+			return encounter.getUuid();
+			
+		} catch (RequestError error) {
+			if (log.isDebugEnabled()) {
+				log.debug("Request Response - " + error);
+			}
+			
+			response.setStatus(error.responseCode);
+			return error.response;
+		}
+	}
+	
+	@RequestMapping(value = "/document", method = RequestMethod.GET)
+	@ResponseBody
+	public Object getDocument(
+			@RequestParam(value = "contentType", required = true) String contentType,
+			@RequestParam(value = "encounterUUID", required = false) String encounterUUID,
+			@RequestParam(value = "uniqueID", required = false) String uniqueID,
+			HttpServletRequest request, HttpServletResponse response) {
+		
+		try {
+			if ((encounterUUID==null || encounterUUID.isEmpty()) && (uniqueID==null || uniqueID.isEmpty()))
+				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Either encounterUUID or uniqueID must be specified");
+			if ((encounterUUID!=null && !encounterUUID.isEmpty()) && (uniqueID!=null && !uniqueID.isEmpty()))
+				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "encounterUUID and uniqueID cannot both be specified");
+			
+			if (uniqueID!=null && !uniqueID.isEmpty())
+				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Query by uniqueID not implemented yet");
+			
+			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
+			ContentHandler handler = chs.getContentHandler(contentType);
+			
+			Content content = handler.fetchContent(encounterUUID);
+			
+			response.setStatus(HttpStatus.OK.value());
+			return content;
 			
 		} catch (RequestError error) {
 			if (log.isDebugEnabled()) {
