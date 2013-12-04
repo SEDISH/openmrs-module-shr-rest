@@ -79,6 +79,7 @@ public class EncounterController extends BaseRestController {
 			@RequestParam(value = "encounterType", required = true) String encounterType,
 			@RequestParam(value = "formatCode", required = true) String formatCode,
 			@RequestParam(value = "isURL", required = false) String isURL,
+			@RequestParam(value = "uniqueID", required = false) String uniqueID,
 			HttpServletRequest request, HttpServletResponse response) {
 		
 		try {
@@ -99,6 +100,8 @@ public class EncounterController extends BaseRestController {
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 			ContentHandler handler = chs.getContentHandler(contentType);
 			Encounter encounter = handler.saveContent(patient, provider, role, type, content);
+			
+			//TODO associate encounter with uniqueID
 			
 			response.setStatus(HttpStatus.CREATED.value());
 			log.debug("CREATED");
