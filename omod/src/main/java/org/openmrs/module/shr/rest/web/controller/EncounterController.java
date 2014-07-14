@@ -208,8 +208,10 @@ public class EncounterController extends BaseRestController {
 		PatientService ps = Context.getPatientService();
 		PatientIdentifierType pidType = ps.getPatientIdentifierTypeByName(idType);
 		
-		if (pidType==null)
-			throw new RequestError(HttpStatus.NOT_FOUND.value(), "Unknown identifier type '" + idType + "'");
+		if (pidType==null) {
+			//Patient can't have a particular id if its id type doesn't exist
+			return null;
+		}
 			
 		List<Patient> patients = ps.getPatients(null, patientId, Collections.singletonList(pidType), true);
 		
@@ -228,6 +230,13 @@ public class EncounterController extends BaseRestController {
 		Patient p = getPatient(patientId, idType);
 		if (p==null) {
 			PatientIdentifierType pidType = Context.getPatientService().getPatientIdentifierTypeByName(idType);
+			if (pidType==null) {
+				pidType = new PatientIdentifierType();
+				pidType.setName(idType);
+				pidType.setDescription("OpenHIE SHR generated patient identifier type for '" + idType + "'");
+				Context.getPatientService().savePatientIdentifierType(pidType);
+				log.info("Created patient identifier type '" + idType + "'");
+			}
 			return createPatient(patientId, pidType);
 		}
 		return p;
@@ -285,12 +294,16 @@ public class EncounterController extends BaseRestController {
 		
 		ProviderAttributeType type = new ProviderAttributeType();
 		type.setName(idType);
+		type.setDatatypeClassname("org.openmrs.customdatatype.datatype.FreeTextDatatype");
+		type.setDescription("OpenHIE SHR generated provider attribute type for '" + idType + "'");
 		ps.saveProviderAttributeType(type);
+		log.info("Created provider attribute type '" + idType + "'");
 		return type;
 	}
 	
 	private Provider createProvider(String id, ProviderAttributeType idType) {
 		Provider p = new Provider();
+		p.setName("Auto-generated provider");
 		ProviderAttribute pa = new ProviderAttribute();
 		pa.setAttributeType(idType);
 		pa.setValue(id);
