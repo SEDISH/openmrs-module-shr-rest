@@ -13,16 +13,10 @@
  */
 package org.openmrs.module.shr.rest.web.controller;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -31,26 +25,16 @@ import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.openmrs.Encounter;
-import org.openmrs.EncounterRole;
-import org.openmrs.EncounterType;
-import org.openmrs.Patient;
-import org.openmrs.PatientIdentifier;
-import org.openmrs.PatientIdentifierType;
-import org.openmrs.PersonName;
-import org.openmrs.Provider;
-import org.openmrs.ProviderAttribute;
-import org.openmrs.ProviderAttributeType;
+import org.openmrs.*;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.PatientService;
 import org.openmrs.api.ProviderService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.shr.contenthandler.api.Content;
-import org.openmrs.module.shr.contenthandler.api.ContentHandler;
-import org.openmrs.module.shr.contenthandler.api.ContentHandlerService;
+import org.openmrs.module.shr.contenthandler.api.*;
 import org.openmrs.module.shr.contenthandler.api.Content.Representation;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
+import org.openmrs.parameter.EncounterSearchCriteriaBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -77,7 +61,12 @@ public class EncounterController extends BaseRestController {
 			@RequestParam(value = "providerId", required = true) String providerId,
 			@RequestParam(value = "providerIdType", required = true) String providerIdType,
 			@RequestParam(value = "encounterType", required = true) String encounterType,
-			@RequestParam(value = "formatCode", required = true) String formatCode,
+			@RequestParam(value = "typeCode_code", required = true) String typeCode_code,
+			@RequestParam(value = "typeCode_codingScheme", required = true) String typeCode_codingScheme,
+			@RequestParam(value = "typeCode_codeName", required = false) String typeCode_codeName,
+			@RequestParam(value = "formatCode_code", required = true) String formatCode_code,
+			@RequestParam(value = "formatCode_codingScheme", required = true) String formatCode_codingScheme,
+			@RequestParam(value = "formatCode_codeName", required = false) String formatCode_codeName,
 			@RequestParam(value = "isURL", required = false) String isURL,
 			@RequestParam(value = "uniqueID", required = false) String uniqueID,
 			HttpServletRequest request, HttpServletResponse response) {
@@ -94,12 +83,19 @@ public class EncounterController extends BaseRestController {
 			Provider provider = getOrCreateProvider(providerId, providerIdType);
 			EncounterRole role = getDefaultEncounterRole();
 			EncounterType type = getOrCreateEncounterType(encounterType);
+			String encounterUUID = role.getUuid();
 			boolean url = (isURL!=null && "true".equalsIgnoreCase(isURL)) ? true : false;
-			Content content = buildContent(contentType, request, formatCode, url);
+			CodedValue typeCode = new CodedValue(typeCode_code, typeCode_codingScheme, typeCode_codingScheme);
+			CodedValue formatCode = new CodedValue(formatCode_code, formatCode_codingScheme, formatCode_codingScheme);
+
+			Content content = buildContent(encounterUUID, contentType, request, typeCode, formatCode, url);
 			
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 			ContentHandler handler = chs.getContentHandler(contentType);
-			Encounter encounter = handler.saveContent(patient, provider, role, type, content);
+
+			Map<EncounterRole, Set<Provider>> providersByRole = new HashMap<>();
+			providersByRole.put(role, new HashSet<>(Arrays.asList(provider))); // only one element
+			Encounter encounter = handler.saveContent(patient, providersByRole, type, content);
 			
 			//TODO associate encounter with uniqueID
 			
@@ -111,9 +107,14 @@ public class EncounterController extends BaseRestController {
 			if (log.isDebugEnabled()) {
 				log.debug("Request Response - " + error);
 			}
-			
 			response.setStatus(error.responseCode);
 			return error.response;
+		} catch (ContentHandlerException error){
+			if (log.isDebugEnabled()){
+				log.debug("ContentHandler - " + error);
+			}
+			response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+			return null;
 		}
 	}
 	
@@ -149,6 +150,12 @@ public class EncounterController extends BaseRestController {
 			
 			response.setStatus(error.responseCode);
 			return error.response;
+		} catch (ContentHandlerException error){
+			if (log.isDebugEnabled()){
+				log.debug("ContentHandler - " + error);
+			}
+			response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+			return null;
 		}
 	}
 	
@@ -344,10 +351,17 @@ public class EncounterController extends BaseRestController {
 		ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 		ContentHandler handler = chs.getContentHandler(contentType);
 		List<Content> res = new LinkedList<Content>();
-		
+
+		EncounterSearchCriteriaBuilder builder = new EncounterSearchCriteriaBuilder();
+		builder.setPatient(patient);
+		builder.setFromDate(from);
+		builder.setToDate(to);
+
+		List<Encounter> encs = Context.getEncounterService().getEncounters(builder.createEncounterSearchCriteria());
+
 		try {
-			for (Content content : handler.queryEncounters(patient, from, to)) {
-				res.add(content);
+			for (Encounter enc : encs) {
+				res.add(handler.fetchContent(enc.getUuid()));
 			}
 		} catch (Exception e) {
 			log.error(e);
@@ -356,8 +370,8 @@ public class EncounterController extends BaseRestController {
 		
 		return res;
 	}
-	
-	private Content buildContent(String contentType, HttpServletRequest request, String formatCode, boolean isURL) throws RequestError {
+
+	private Content buildContent(String contentId, String contentType, HttpServletRequest request, CodedValue typeCode, CodedValue formatCode, boolean isURL) throws RequestError {
 		try {
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			IOUtils.copy(request.getInputStream(), out);
@@ -375,8 +389,7 @@ public class EncounterController extends BaseRestController {
 				payload = Base64.encodeBase64String(out.toByteArray());
 				rep = Representation.B64;
 			}
-			
-			return new Content(payload, isURL, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
+			return new Content(contentId, payload.getBytes(), isURL, typeCode, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
 		} catch (IOException ex) {
 			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error while processing request: " + ex.getMessage());
 		}
