@@ -61,12 +61,12 @@ public class EncounterController extends BaseRestController {
 			@RequestParam(value = "providerId", required = true) String providerId,
 			@RequestParam(value = "providerIdType", required = true) String providerIdType,
 			@RequestParam(value = "encounterType", required = true) String encounterType,
-			@RequestParam(value = "typeCode_code", required = true) String typeCode_code,
-			@RequestParam(value = "typeCode_codingScheme", required = true) String typeCode_codingScheme,
-			@RequestParam(value = "typeCode_codeName", required = false) String typeCode_codeName,
-			@RequestParam(value = "formatCode_code", required = true) String formatCode_code,
-			@RequestParam(value = "formatCode_codingScheme", required = true) String formatCode_codingScheme,
-			@RequestParam(value = "formatCode_codeName", required = false) String formatCode_codeName,
+			@RequestParam(value = "typeCodeCode", required = true) String typeCodeCode,
+			@RequestParam(value = "typeCodeCodingScheme", required = true) String typeCodeCodingScheme,
+			@RequestParam(value = "typeCodeCodeName", required = false) String typeCodeCodeName,
+			@RequestParam(value = "formatCodeCode", required = true) String formatCodeCode,
+			@RequestParam(value = "formatCodeCodingScheme", required = true) String formatCodeCodingScheme,
+			@RequestParam(value = "formatCodeCodeName", required = false) String formatCodeCodeName,
 			@RequestParam(value = "isURL", required = false) String isURL,
 			@RequestParam(value = "uniqueID", required = false) String uniqueID,
 			HttpServletRequest request, HttpServletResponse response) {
@@ -78,17 +78,18 @@ public class EncounterController extends BaseRestController {
 			
 			if (contentType==null || contentType.isEmpty())
 				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Content-Type expected");
-			
+			if (uniqueID == null || uniqueID.isEmpty())
+				uniqueID = UUID.randomUUID().toString();
+
 			Patient patient = getOrCreatePatient(patientId, patientIdType);
 			Provider provider = getOrCreateProvider(providerId, providerIdType);
 			EncounterRole role = getDefaultEncounterRole();
 			EncounterType type = getOrCreateEncounterType(encounterType);
-			String encounterUUID = role.getUuid();
 			boolean url = (isURL!=null && "true".equalsIgnoreCase(isURL)) ? true : false;
-			CodedValue typeCode = new CodedValue(typeCode_code, typeCode_codingScheme, typeCode_codingScheme);
-			CodedValue formatCode = new CodedValue(formatCode_code, formatCode_codingScheme, formatCode_codingScheme);
+			CodedValue typeCode = new CodedValue(typeCodeCode, typeCodeCodingScheme, typeCodeCodingScheme);
+			CodedValue formatCode = new CodedValue(formatCodeCode, formatCodeCodingScheme, formatCodeCodingScheme);
 
-			Content content = buildContent(encounterUUID, contentType, request, typeCode, formatCode, url);
+			Content content = buildContent(uniqueID, contentType, request, typeCode, formatCode, url);
 			
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
 			ContentHandler handler = chs.getContentHandler(contentType);
@@ -147,7 +148,7 @@ public class EncounterController extends BaseRestController {
 			if (log.isDebugEnabled()) {
 				log.debug("Request Response - " + error);
 			}
-			
+
 			response.setStatus(error.responseCode);
 			return error.response;
 		} catch (ContentHandlerException error){
@@ -371,7 +372,7 @@ public class EncounterController extends BaseRestController {
 		return res;
 	}
 
-	private Content buildContent(String contentId, String contentType, HttpServletRequest request, CodedValue typeCode, CodedValue formatCode, boolean isURL) throws RequestError {
+	private Content buildContent(String uniqueId, String contentType, HttpServletRequest request, CodedValue typeCode, CodedValue formatCode, boolean isURL) throws RequestError {
 		try {
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			IOUtils.copy(request.getInputStream(), out);
@@ -389,7 +390,7 @@ public class EncounterController extends BaseRestController {
 				payload = Base64.encodeBase64String(out.toByteArray());
 				rep = Representation.B64;
 			}
-			return new Content(contentId, payload.getBytes(), isURL, typeCode, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
+			return new Content(uniqueId, payload.getBytes(), isURL, typeCode, formatCode, request.getContentType(), request.getCharacterEncoding(), rep, null, null);
 		} catch (IOException ex) {
 			throw new RequestError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error while processing request: " + ex.getMessage());
 		}
