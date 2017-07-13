@@ -23,6 +23,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.openmrs.*;
@@ -69,16 +70,17 @@ public class EncounterController extends BaseRestController {
 			@RequestParam(value = "formatCodeCodeName", required = false) String formatCodeCodeName,
 			@RequestParam(value = "isURL", required = false) String isURL,
 			@RequestParam(value = "uniqueID", required = false) String uniqueID,
-			HttpServletRequest request, HttpServletResponse response) {
+			HttpServletRequest request, HttpServletResponse response)
+			throws ContentHandlerException {
 		
 		try {
 			if (log.isDebugEnabled()) {
 				log.debug(String.format("SHR GET documents request for patient %s-%s", patientIdType, patientId));
 			}
 			
-			if (contentType==null || contentType.isEmpty())
+			if (StringUtils.isBlank(contentType))
 				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Content-Type expected");
-			if (uniqueID == null || uniqueID.isEmpty())
+			if (StringUtils.isBlank(uniqueID))
 				uniqueID = UUID.randomUUID().toString();
 
 			Patient patient = getOrCreatePatient(patientId, patientIdType);
@@ -110,12 +112,6 @@ public class EncounterController extends BaseRestController {
 			}
 			response.setStatus(error.responseCode);
 			return error.response;
-		} catch (ContentHandlerException error){
-			if (log.isDebugEnabled()){
-				log.debug("ContentHandler - " + error);
-			}
-			response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-			return null;
 		}
 	}
 	
@@ -125,15 +121,16 @@ public class EncounterController extends BaseRestController {
 			@RequestParam(value = "contentType", required = true) String contentType,
 			@RequestParam(value = "encounterUUID", required = false) String encounterUUID,
 			@RequestParam(value = "uniqueID", required = false) String uniqueID,
-			HttpServletRequest request, HttpServletResponse response) {
+			HttpServletRequest request, HttpServletResponse response)
+			throws ContentHandlerException {
 		
 		try {
-			if ((encounterUUID==null || encounterUUID.isEmpty()) && (uniqueID==null || uniqueID.isEmpty()))
+			if (StringUtils.isBlank(encounterUUID) && StringUtils.isBlank(uniqueID))
 				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Either encounterUUID or uniqueID must be specified");
-			if ((encounterUUID!=null && !encounterUUID.isEmpty()) && (uniqueID!=null && !uniqueID.isEmpty()))
+			if (!StringUtils.isBlank(encounterUUID) && !StringUtils.isBlank(uniqueID))
 				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "encounterUUID and uniqueID cannot both be specified");
 			
-			if (uniqueID!=null && !uniqueID.isEmpty())
+			if (!StringUtils.isBlank(uniqueID))
 				throw new RequestError(HttpStatus.BAD_REQUEST.value(), "Query by uniqueID not implemented yet");
 			
 			ContentHandlerService chs = Context.getService(ContentHandlerService.class);
@@ -151,12 +148,6 @@ public class EncounterController extends BaseRestController {
 
 			response.setStatus(error.responseCode);
 			return error.response;
-		} catch (ContentHandlerException error){
-			if (log.isDebugEnabled()){
-				log.debug("ContentHandler - " + error);
-			}
-			response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-			return null;
 		}
 	}
 	
