@@ -13,6 +13,10 @@
 	<name>SHR REST Interface Module API</name>
 	<description>API project for SHR REST Interface</description>
 
+	<properties>
+		<main_dir>${project.parent.relativePath}/..</main_dir>
+	</properties>
+
 	<dependencies>
 	
 		<!-- 
@@ -30,6 +34,8 @@
 		<dependency>
 			<groupId>org.openmrs.module</groupId>
 			<artifactId>shr-contenthandler-api</artifactId>
+			<scope>system</scope>
+			<systemPath>${project.basedir}/../lib/shr-contenthandler-3.0.1-SNAPSHOT.jar</systemPath>
 		</dependency>
 				
 		<!-- End OpenMRS modules -->

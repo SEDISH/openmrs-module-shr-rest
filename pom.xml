@@ -55,7 +55,8 @@
 				<artifactId>shr-contenthandler-api</artifactId>
 				<version>${contenthandlerVersion}</version>
 				<type>jar</type>
-				<scope>provided</scope>
+				<scope>system</scope>
+				<systemPath>${project.basedir}/lib/shr-contenthandler-3.0.1-SNAPSHOT.jar</systemPath>
 			</dependency>
 			<dependency>
 				<groupId>org.openmrs.module</groupId>
